@@ -8,15 +8,15 @@ import hashlib
 import json
 import math
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple, Set
+from typing import Dict, List, Optional, Any, Tuple, Set, ClassVar
 from dataclasses import dataclass, asdict
 from enum import Enum
 import re
 
 from pydantic import BaseModel, Field
-from ...core.config import settings
-from ...core.logger import get_logger
-from ...core.shared_memory import get_shared_memory
+from core.config import settings
+from core.logger import get_logger
+from core.shared_memory import get_shared_memory
 
 logger = get_logger(__name__)
 
@@ -96,7 +96,7 @@ class SearchQuery:
 class SemanticSearch(BaseModel):
     """Semantic similarity recall engine for information matching."""
     
-    shared_memory = get_shared_memory()
+    shared_memory: ClassVar = get_shared_memory()
     
     # Search configuration
     default_similarity_threshold: float = Field(default=0.7, description="Default similarity threshold")
@@ -578,6 +578,6 @@ class SemanticSearch(BaseModel):
 semantic_search = SemanticSearch()
 
 
-async def get_semantic_search() -> SemanticSearch:
+def get_semantic_search() -> SemanticSearch:
     """Get the global semantic search instance."""
     return semantic_search

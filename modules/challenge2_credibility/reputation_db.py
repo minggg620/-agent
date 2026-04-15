@@ -7,16 +7,16 @@ import sqlite3
 import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, ClassVar
 from dataclasses import asdict
 from enum import Enum
 import json
 
 from pydantic import BaseModel, Field
-from ...core.config import settings
-from ...core.logger import get_logger
-from ...core.shared_memory import get_shared_memory
-from .reputation_model import ReputationScore, ReputationLevel, MetricType
+from core.config import settings
+from core.logger import get_logger
+from core.shared_memory import get_shared_memory
+from modules.challenge2_credibility.reputation_model import ReputationScore, ReputationLevel, MetricType
 
 logger = get_logger(__name__)
 
@@ -61,7 +61,7 @@ class ReputationHistory(BaseModel):
 class ReputationDatabase(BaseModel):
     """SQLite database for persistent reputation storage with Pydantic models."""
     
-    shared_memory = get_shared_memory()
+    shared_memory: ClassVar = get_shared_memory()
     
     # Database configuration
     db_path: Path = Field(default_factory=lambda: Path(settings.project_root) / "data" / "reputation.db")
@@ -738,6 +738,6 @@ class ReputationDatabase(BaseModel):
 reputation_db = ReputationDatabase()
 
 
-async def get_reputation_database() -> ReputationDatabase:
+def get_reputation_database() -> ReputationDatabase:
     """Get the global reputation database instance."""
     return reputation_db

@@ -5,21 +5,21 @@ Dialog Strategist: LangGraph-based conversation game optimization workflow
 
 import asyncio
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, ClassVar
 from dataclasses import dataclass, asdict
 from enum import Enum
 import json
 
-from langgraph import StateGraph, END
+from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from pydantic import BaseModel, Field
 
-from ...core.config import settings
-from ...core.logger import get_logger
-from ...core.shared_memory import get_shared_memory
-from ...core.identity_manager import get_identity_manager
-from .prompt_templates import PromptTemplates
-from .experiment_logger import ExperimentLogger, ExperimentResult
+from core.config import settings
+from core.logger import get_logger
+from core.shared_memory import get_shared_memory
+from core.identity_manager import get_identity_manager
+from modules.challenge1_injection.prompt_templates import PromptTemplates
+from modules.challenge1_injection.experiment_logger import ExperimentLogger, ExperimentResult
 
 logger = get_logger(__name__)
 
@@ -63,15 +63,16 @@ class ConversationState:
 class DialogStrategist(BaseModel):
     """Main dialog strategist using LangGraph for conversation optimization."""
     
-    shared_memory = get_shared_memory()
-    identity_manager = get_identity_manager()
-    prompt_templates = PromptTemplates()
-    experiment_logger = ExperimentLogger()
+    shared_memory: ClassVar = get_shared_memory()
+    identity_manager: ClassVar = get_identity_manager()
+    prompt_templates: ClassVar = PromptTemplates()
+    experiment_logger: ClassVar = ExperimentLogger()
     
     # Strategy configuration
     max_conversation_depth: int = Field(default=10, description="Maximum conversation depth")
     max_injection_attempts: int = Field(default=5, description="Maximum injection attempts per conversation")
     safety_probe_frequency: int = Field(default=3, description="How often to probe safety boundaries")
+    workflow: Optional[StateGraph] = Field(default=None, description="LangGraph workflow instance")
     
     class Config:
         arbitrary_types_allowed = True
@@ -444,6 +445,6 @@ class DialogStrategist(BaseModel):
 dialog_strategist = DialogStrategist()
 
 
-async def get_dialog_strategist() -> DialogStrategist:
+def get_dialog_strategist() -> DialogStrategist:
     """Get the global dialog strategist instance."""
     return dialog_strategist

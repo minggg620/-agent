@@ -40,7 +40,7 @@ class SharedMemory(BaseModel):
     """Shared memory system for agent state management."""
     
     storage: Dict[str, MemoryEntry] = Field(default_factory=dict)
-    max_size: int = Field(default=settings.shared_memory_size)
+    max_size: int = Field(default=settings.max_memory_size)
     retention_days: int = Field(default=settings.memory_retention_days)
     
     class Config:

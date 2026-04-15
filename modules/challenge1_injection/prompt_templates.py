@@ -8,7 +8,7 @@ from enum import Enum
 from dataclasses import dataclass
 import json
 
-from ...core.logger import get_logger
+from core.logger import get_logger
 
 logger = get_logger(__name__)
 

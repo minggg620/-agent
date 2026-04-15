@@ -8,17 +8,17 @@ import hashlib
 import re
 import json
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple, Set
+from typing import Dict, List, Optional, Any, Tuple, Set, ClassVar
 from dataclasses import dataclass, asdict
 from enum import Enum
 import math
 
 from pydantic import BaseModel, Field
-from ...core.config import settings
-from ...core.logger import get_logger
-from ...core.shared_memory import get_shared_memory
-from .semantic_search import get_semantic_search, SemanticSearch
-from .alert_system import get_alert_system, AlertSystem
+from core.config import settings
+from core.logger import get_logger
+from core.shared_memory import get_shared_memory
+from modules.challenge4_monitor.semantic_search import get_semantic_search, SemanticSearch
+from modules.challenge4_monitor.alert_system import get_alert_system, AlertSystem
 
 logger = get_logger(__name__)
 
@@ -127,7 +127,7 @@ class FollowUpAction:
 class InformationMonitor(BaseModel):
     """Real-time information monitoring system with semantic filtering and confidence scoring."""
     
-    shared_memory = get_shared_memory()
+    shared_memory: ClassVar = get_shared_memory()
     semantic_search: SemanticSearch = None
     alert_system: AlertSystem = None
     
@@ -600,6 +600,6 @@ class InformationMonitor(BaseModel):
 information_monitor = InformationMonitor()
 
 
-async def get_information_monitor() -> InformationMonitor:
+def get_information_monitor() -> InformationMonitor:
     """Get the global information monitor instance."""
     return information_monitor

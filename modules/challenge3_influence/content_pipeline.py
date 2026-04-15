@@ -7,7 +7,7 @@ import asyncio
 import hashlib
 import random
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple, Set
+from typing import Dict, List, Optional, Any, Tuple, Set, ClassVar
 from dataclasses import dataclass, asdict
 from enum import Enum
 import json
@@ -15,9 +15,9 @@ import statistics
 import math
 
 from pydantic import BaseModel, Field
-from ...core.config import settings
-from ...core.logger import get_logger
-from ...core.shared_memory import get_shared_memory
+from core.config import settings
+from core.logger import get_logger
+from core.shared_memory import get_shared_memory
 
 logger = get_logger(__name__)
 
@@ -132,7 +132,7 @@ class PipelineMetrics:
 class ContentPipeline(BaseModel):
     """Complete content pipeline for influence operations."""
     
-    shared_memory = get_shared_memory()
+    shared_memory: ClassVar = get_shared_memory()
     
     # Pipeline configuration
     max_topics_per_batch: int = Field(default=10, description="Maximum topics to process per batch")
@@ -741,6 +741,6 @@ class ContentPipeline(BaseModel):
 content_pipeline = ContentPipeline()
 
 
-async def get_content_pipeline() -> ContentPipeline:
+def get_content_pipeline() -> ContentPipeline:
     """Get the global content pipeline instance."""
     return content_pipeline

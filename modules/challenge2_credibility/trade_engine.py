@@ -7,17 +7,17 @@ import asyncio
 import hashlib
 import secrets
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple, Set
+from typing import Dict, List, Optional, Any, Tuple, Set, ClassVar
 from dataclasses import dataclass, asdict
 from enum import Enum
 import json
 import math
 
 from pydantic import BaseModel, Field
-from ...core.config import settings
-from ...core.logger import get_logger
-from ...core.shared_memory import get_shared_memory
-from .reputation_model import get_reputation_model, ReputationLevel
+from core.config import settings
+from core.logger import get_logger
+from core.shared_memory import get_shared_memory
+from modules.challenge2_credibility.reputation_model import get_reputation_model, ReputationLevel
 
 logger = get_logger(__name__)
 
@@ -135,8 +135,8 @@ class TradeStrategy(BaseModel):
 class TradeEngine(BaseModel):
     """Gradual exchange strategy engine with verification logic."""
     
-    shared_memory = get_shared_memory()
-    reputation_model = get_reputation_model()
+    shared_memory: ClassVar = get_shared_memory()
+    reputation_model: ClassVar = get_reputation_model()
     
     # Default strategy
     default_strategy: TradeStrategy = Field(default_factory=TradeStrategy)
@@ -589,6 +589,6 @@ class TradeEngine(BaseModel):
 trade_engine = TradeEngine()
 
 
-async def get_trade_engine() -> TradeEngine:
+def get_trade_engine() -> TradeEngine:
     """Get the global trade engine instance."""
     return trade_engine

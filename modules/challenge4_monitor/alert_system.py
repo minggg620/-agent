@@ -7,7 +7,7 @@ import asyncio
 import hashlib
 import json
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple, Set
+from typing import Dict, List, Optional, Any, Tuple, Set, ClassVar
 from dataclasses import dataclass, asdict
 from enum import Enum
 import smtplib
@@ -15,9 +15,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from pydantic import BaseModel, Field
-from ...core.config import settings
-from ...core.logger import get_logger
-from ...core.shared_memory import get_shared_memory
+from core.config import settings
+from core.logger import get_logger
+from core.shared_memory import get_shared_memory
 
 logger = get_logger(__name__)
 
@@ -154,7 +154,7 @@ class AlertDelivery:
 class AlertSystem(BaseModel):
     """High-value clue alert and automatic push system."""
     
-    shared_memory = get_shared_memory()
+    shared_memory: ClassVar = get_shared_memory()
     
     # Alert configuration
     default_priority: AlertPriority = Field(default=AlertPriority.MEDIUM, description="Default alert priority")
@@ -757,6 +757,6 @@ class AlertSystem(BaseModel):
 alert_system = AlertSystem()
 
 
-async def get_alert_system() -> AlertSystem:
+def get_alert_system() -> AlertSystem:
     """Get the global alert system instance."""
     return alert_system

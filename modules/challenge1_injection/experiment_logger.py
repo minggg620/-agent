@@ -13,9 +13,9 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 import pandas as pd
 
-from ...core.config import settings
-from ...core.logger import get_logger
-from ...core.shared_memory import get_shared_memory
+from core.config import settings
+from core.logger import get_logger
+from core.shared_memory import get_shared_memory
 
 logger = get_logger(__name__)
 
@@ -667,6 +667,6 @@ class ExperimentLogger:
 experiment_logger = ExperimentLogger()
 
 
-async def get_experiment_logger() -> ExperimentLogger:
+def get_experiment_logger() -> ExperimentLogger:
     """Get the global experiment logger instance."""
     return experiment_logger

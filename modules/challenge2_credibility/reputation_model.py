@@ -5,7 +5,7 @@ Reputation Model: Comprehensive reputation scoring system with multiple metrics
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, ClassVar
 from dataclasses import dataclass, asdict
 from enum import Enum
 import json
@@ -13,9 +13,9 @@ import statistics
 import math
 
 from pydantic import BaseModel, Field
-from ...core.config import settings
-from ...core.logger import get_logger
-from ...core.shared_memory import get_shared_memory
+from core.config import settings
+from core.logger import get_logger
+from core.shared_memory import get_shared_memory
 
 logger = get_logger(__name__)
 
@@ -85,7 +85,7 @@ class ReputationScore(BaseModel):
 class ReputationModel(BaseModel):
     """Comprehensive reputation scoring model with multiple evaluation metrics."""
     
-    shared_memory = get_shared_memory()
+    shared_memory: ClassVar = get_shared_memory()
     
     # Metric weights (configurable)
     metric_weights: Dict[MetricType, float] = Field(default={
@@ -613,6 +613,6 @@ class ReputationModel(BaseModel):
 reputation_model = ReputationModel()
 
 
-async def get_reputation_model() -> ReputationModel:
+def get_reputation_model() -> ReputationModel:
     """Get the global reputation model instance."""
     return reputation_model

@@ -8,7 +8,7 @@ import hashlib
 import random
 import statistics
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple, Union
+from typing import Dict, List, Optional, Any, Tuple, Union, ClassVar
 from dataclasses import dataclass, asdict
 from enum import Enum
 import json
@@ -16,9 +16,9 @@ import math
 
 from pydantic import BaseModel, Field
 from scipy import stats
-from ...core.config import settings
-from ...core.logger import get_logger
-from ...core.shared_memory import get_shared_memory
+from core.config import settings
+from core.logger import get_logger
+from core.shared_memory import get_shared_memory
 
 logger = get_logger(__name__)
 
@@ -137,7 +137,7 @@ class StatisticalTest(BaseModel):
 class ABTestSystem(BaseModel):
     """Complete A/B testing system for content optimization."""
     
-    shared_memory = get_shared_memory()
+    shared_memory: ClassVar = get_shared_memory()
     
     # System configuration
     default_confidence_level: float = Field(default=0.95, description="Default confidence level")
@@ -654,6 +654,6 @@ class ABTestSystem(BaseModel):
 ab_test_system = ABTestSystem()
 
 
-async def get_ab_test_system() -> ABTestSystem:
+def get_ab_test_system() -> ABTestSystem:
     """Get the global A/B test system instance."""
     return ab_test_system

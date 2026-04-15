@@ -6,12 +6,12 @@ Content Templates: 5 major content type templates for influence operations
 import json
 import random
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, ClassVar
 from dataclasses import dataclass
 from enum import Enum
 
-from ...core.logger import get_logger
-from ...core.shared_memory import get_shared_memory
+from core.logger import get_logger
+from core.shared_memory import get_shared_memory
 
 logger = get_logger(__name__)
 
@@ -78,7 +78,7 @@ class ContentTemplate:
 class ContentTemplates:
     """Comprehensive content template management system."""
     
-    shared_memory = get_shared_memory()
+    shared_memory: ClassVar = get_shared_memory()
     
     def __init__(self):
         self.templates = self._initialize_templates()

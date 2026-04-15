@@ -5,12 +5,13 @@ LangGraph-based social strategy agent with integrated Challenge 1-4 modules
 
 import asyncio
 import json
+import hashlib
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple, Union
+from typing import Dict, List, Optional, Any, Tuple, Union, ClassVar
 from dataclasses import dataclass, asdict
 from enum import Enum
 
-from langgraph import StateGraph, END
+from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from pydantic import BaseModel, Field
 
@@ -139,9 +140,9 @@ class SocialArenaAgent(BaseModel):
     """Main Social Arena Agent with integrated Challenge 1-4 modules."""
     
     # Core components
-    shared_memory = get_shared_memory()
-    identity_manager = get_identity_manager()
-    logger = get_logger(__name__)
+    shared_memory: ClassVar = get_shared_memory()
+    identity_manager: ClassVar = get_identity_manager()
+    logger: ClassVar = get_logger(__name__)
     
     # Challenge modules
     dialog_strategist: DialogStrategist = None
@@ -254,7 +255,7 @@ class SocialArenaAgent(BaseModel):
         )
         
         # Compile workflow
-        self.workflow.compile()
+        self.workflow = self.workflow.compile()
         
         logger.info("LangGraph workflow initialized")
     
@@ -267,7 +268,7 @@ class SocialArenaAgent(BaseModel):
             logger.info(f"Starting Social Arena Agent run with session: {state.session_id}")
             
             # Execute workflow
-            result = await self.workflow.ainvoke(state)
+            result = await self.workflow.ainvoke(asdict(state))
             
             # Final state update and cleanup
             await self._finalize_run(result)
@@ -282,7 +283,7 @@ class SocialArenaAgent(BaseModel):
     async def _initialize_state(self, input_data: Dict[str, Any]) -> AgentState:
         """Initialize agent state from input data."""
         # Generate unique IDs
-        agent_id = self.identity_manager.create_agent_identity("social_arena_agent")
+        agent_id = self.identity_manager.current_identity.agent_id
         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hashlib.md5(str(input_data).encode()).hexdigest()[:8]}"
         
         # Determine initial mode and challenge
@@ -335,12 +336,12 @@ class SocialArenaAgent(BaseModel):
             })
             
             logger.info(f"Routed to {state.active_challenge.value} challenge")
-            return state
+            return asdict(state)
             
         except Exception as e:
             logger.error(f"Error in route decision node: {e}")
             state.error_log.append(f"Route decision error: {str(e)}")
-            return state
+            return asdict(state)
     
     async def _execute_injection_node(self, state: AgentState) -> AgentState:
         """Execute Challenge 1: Injection countermeasures."""
@@ -386,12 +387,12 @@ class SocialArenaAgent(BaseModel):
             })
             
             logger.info(f"Injection challenge executed successfully")
-            return state
+            return asdict(state)
             
         except Exception as e:
             logger.error(f"Error in injection node: {e}")
             state.error_log.append(f"Injection execution error: {str(e)}")
-            return state
+            return asdict(state)
     
     async def _execute_credibility_node(self, state: AgentState) -> AgentState:
         """Execute Challenge 2: Credibility and trust building."""
@@ -435,12 +436,12 @@ class SocialArenaAgent(BaseModel):
             })
             
             logger.info(f"Credibility challenge executed successfully")
-            return state
+            return asdict(state)
             
         except Exception as e:
             logger.error(f"Error in credibility node: {e}")
             state.error_log.append(f"Credibility execution error: {str(e)}")
-            return state
+            return asdict(state)
     
     async def _execute_influence_node(self, state: AgentState) -> AgentState:
         """Execute Challenge 3: Content influence and A/B testing."""
@@ -481,12 +482,12 @@ class SocialArenaAgent(BaseModel):
             })
             
             logger.info(f"Influence challenge executed successfully")
-            return state
+            return asdict(state)
             
         except Exception as e:
             logger.error(f"Error in influence node: {e}")
             state.error_log.append(f"Influence execution error: {str(e)}")
-            return state
+            return asdict(state)
     
     async def _execute_monitor_node(self, state: AgentState) -> AgentState:
         """Execute Challenge 4: Information monitoring and alerts."""
@@ -523,12 +524,12 @@ class SocialArenaAgent(BaseModel):
             })
             
             logger.info(f"Monitor challenge executed successfully")
-            return state
+            return asdict(state)
             
         except Exception as e:
             logger.error(f"Error in monitor node: {e}")
             state.error_log.append(f"Monitor execution error: {str(e)}")
-            return state
+            return asdict(state)
     
     async def _update_state_node(self, state: AgentState) -> AgentState:
         """Update agent state and store in shared memory."""
@@ -545,12 +546,12 @@ class SocialArenaAgent(BaseModel):
                 state.messages = state.messages[-50:]  # Keep last 50 messages
             
             logger.debug(f"State updated for session: {state.session_id}")
-            return state
+            return asdict(state)
             
         except Exception as e:
             logger.error(f"Error in state update node: {e}")
             state.error_log.append(f"State update error: {str(e)}")
-            return state
+            return asdict(state)
     
     async def _handle_errors_node(self, state: AgentState) -> AgentState:
         """Handle errors and recovery."""
@@ -579,12 +580,12 @@ class SocialArenaAgent(BaseModel):
             state.last_action = "handle_errors"
             state.last_action_time = datetime.now()
             
-            return state
+            return asdict(state)
             
         except Exception as e:
             logger.error(f"Error in error handling node: {e}")
             state.error_log.append(f"Error handling error: {str(e)}")
-            return state
+            return asdict(state)
     
     async def _analyze_context(self, state: AgentState) -> Dict[str, Any]:
         """Analyze current context for routing decisions."""
@@ -635,29 +636,17 @@ class SocialArenaAgent(BaseModel):
         # Default to monitoring
         return {"challenge": ChallengeType.MONITOR, "reasoning": "Default monitoring strategy"}
     
-    def _route_to_challenge(self, state: AgentState) -> str:
+    def _route_to_challenge(self, state: Dict[str, Any]) -> str:
         """Route to appropriate challenge node."""
-        if state.error_log and len(state.error_log) > 3:
+        if state.get("error_log") and len(state["error_log"]) > 3:
             return "error"
         
-        return state.active_challenge.value
+        return state["active_challenge"].value
     
-    def _should_continue(self, state: AgentState) -> str:
+    def _should_continue(self, state: Dict[str, Any]) -> str:
         """Determine if workflow should continue or end."""
-        # Check for termination conditions
-        if state.error_log and len(state.error_log) > 10:
-            return "end"
-        
-        # Check if we've completed a full cycle
-        if state.last_action == "update_state" and len(state.messages) > 0:
-            # Check time-based termination
-            if state.last_action_time:
-                elapsed = (datetime.now() - state.last_action_time).total_seconds()
-                if elapsed > self.task_timeout_seconds:
-                    return "end"
-        
-        # Continue by default
-        return "continue"
+        # For now, always end after one cycle to prevent infinite loops
+        return "end"
     
     async def _calculate_performance_metrics(self, state: AgentState) -> Dict[str, float]:
         """Calculate agent performance metrics."""
@@ -740,7 +729,7 @@ class SocialArenaAgent(BaseModel):
 social_arena_agent = SocialArenaAgent()
 
 
-async def get_social_arena_agent() -> SocialArenaAgent:
+def get_social_arena_agent() -> SocialArenaAgent:
     """Get the global Social Arena Agent instance."""
     return social_arena_agent
 
