@@ -7,12 +7,13 @@ import asyncio
 import json
 import hashlib
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple, Union, ClassVar
+from typing import Dict, List, Optional, Any, Tuple, Union, ClassVar, TypedDict, Annotated
 from dataclasses import dataclass, asdict
 from enum import Enum
+from langgraph.graph.message import add_messages
 
 from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
 from pydantic import BaseModel, Field
 
 from core.config import settings
@@ -66,74 +67,44 @@ class TaskPriority(Enum):
     URGENT = 5
 
 
-@dataclass
-class AgentState:
-    """Unified state for Social Arena Agent using LangGraph."""
+class AgentState(TypedDict):
+    """Unified state for Social Arena Agent using LangGraph TypedDict pattern."""
     # Core state
     agent_id: str
     session_id: str
-    current_mode: AgentMode
-    active_challenge: ChallengeType
+    current_mode: str  # AgentMode as string
+    active_challenge: str  # ChallengeType as string
     
     # Challenge 1: Injection state
-    conversation_state: Optional[Dict[str, Any]] = None
-    current_persona: Optional[str] = None
-    injection_strategy: Optional[str] = None
-    experiment_results: List[Dict[str, Any]] = None
+    conversation_state: Optional[Dict[str, Any]]
+    current_persona: Optional[str]
+    injection_strategy: Optional[str]
+    experiment_results: List[Dict[str, Any]]
     
     # Challenge 2: Credibility state
-    reputation_score: float = 0.5
-    trust_level: float = 0.5
-    active_trades: List[Dict[str, Any]] = None
-    partner_reputations: Dict[str, float] = None
+    reputation_score: float
+    trust_level: float
+    active_trades: List[Dict[str, Any]]
+    partner_reputations: Dict[str, float]
     
     # Challenge 3: Influence state
-    content_queue: List[Dict[str, Any]] = None
-    active_ab_tests: List[Dict[str, Any]] = None
-    influence_metrics: Dict[str, float] = None
+    content_queue: List[Dict[str, Any]]
+    active_ab_tests: List[Dict[str, Any]]
+    influence_metrics: Dict[str, float]
     
     # Challenge 4: Monitor state
-    monitored_sources: List[str] = None
-    high_confidence_clues: List[Dict[str, Any]] = None
-    alert_queue: List[Dict[str, Any]] = None
+    monitored_sources: List[str]
+    high_confidence_clues: List[Dict[str, Any]]
+    alert_queue: List[Dict[str, Any]]
     
     # Agent metadata
-    last_action: Optional[str] = None
-    last_action_time: Optional[datetime] = None
-    performance_metrics: Dict[str, float] = None
-    error_log: List[str] = None
+    last_action: Optional[str]
+    last_action_time: Optional[str]  # ISO format datetime string
+    performance_metrics: Dict[str, float]
+    error_log: List[str]
     
-    # LangGraph messages
-    messages: List[Dict[str, Any]] = None
-    
-    def __post_init__(self):
-        """Initialize default values."""
-        if self.experiment_results is None:
-            self.experiment_results = []
-        if self.active_trades is None:
-            self.active_trades = []
-        if self.partner_reputations is None:
-            self.partner_reputations = {}
-        if self.content_queue is None:
-            self.content_queue = []
-        if self.active_ab_tests is None:
-            self.active_ab_tests = []
-        if self.influence_metrics is None:
-            self.influence_metrics = {}
-        if self.monitored_sources is None:
-            self.monitored_sources = []
-        if self.high_confidence_clues is None:
-            self.high_confidence_clues = []
-        if self.alert_queue is None:
-            self.alert_queue = []
-        if self.performance_metrics is None:
-            self.performance_metrics = {}
-        if self.error_log is None:
-            self.error_log = []
-        if self.messages is None:
-            self.messages = []
-        if isinstance(self.last_action_time, str):
-            self.last_action_time = datetime.fromisoformat(self.last_action_time)
+    # LangGraph messages (using custom message format)
+    messages: List[Dict[str, Any]]
 
 
 class SocialArenaAgent(BaseModel):
@@ -265,10 +236,10 @@ class SocialArenaAgent(BaseModel):
             # Initialize agent state
             state = await self._initialize_state(initial_input or {})
             
-            logger.info(f"Starting Social Arena Agent run with session: {state.session_id}")
+            logger.info(f"Starting Social Arena Agent run with session: {state['session_id']}")
             
             # Execute workflow
-            result = await self.workflow.ainvoke(asdict(state))
+            result = await self.workflow.ainvoke(state)
             
             # Final state update and cleanup
             await self._finalize_run(result)
@@ -287,35 +258,52 @@ class SocialArenaAgent(BaseModel):
         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hashlib.md5(str(input_data).encode()).hexdigest()[:8]}"
         
         # Determine initial mode and challenge
-        mode = AgentMode(input_data.get("mode", self.default_mode.value))
-        challenge = ChallengeType(input_data.get("challenge", "injection"))
+        mode = input_data.get("mode", self.default_mode.value)
+        challenge = input_data.get("challenge", "injection")
         
-        # Create initial state
-        state = AgentState(
-            agent_id=agent_id,
-            session_id=session_id,
-            current_mode=mode,
-            active_challenge=challenge,
-            last_action_time=datetime.now()
-        )
+        # Create initial state as dictionary (AgentState is now TypedDict)
+        state: AgentState = {
+            "agent_id": agent_id,
+            "session_id": session_id,
+            "current_mode": mode,
+            "active_challenge": challenge,
+            "conversation_state": None,
+            "current_persona": None,
+            "injection_strategy": None,
+            "experiment_results": [],
+            "reputation_score": 0.5,
+            "trust_level": 0.5,
+            "active_trades": [],
+            "partner_reputations": {},
+            "content_queue": [],
+            "active_ab_tests": [],
+            "influence_metrics": {},
+            "monitored_sources": [],
+            "high_confidence_clues": [],
+            "alert_queue": [],
+            "last_action": None,
+            "last_action_time": datetime.now().isoformat(),
+            "performance_metrics": {},
+            "error_log": [],
+            "messages": []
+        }
         
         # Load state from shared memory if exists
         existing_state = self.shared_memory.get(f"agent_state:{session_id}")
         if existing_state:
             # Update state with existing data
             for key, value in existing_state.items():
-                if hasattr(state, key):
-                    setattr(state, key, value)
+                state[key] = value
         
         # Store in shared memory
-        self.shared_memory.set(f"agent_state:{session_id}", asdict(state), tags=["agent_state", session_id])
+        self.shared_memory.set(f"agent_state:{session_id}", state, tags=["agent_state", session_id])
         
         return state
     
     async def _route_decision_node(self, state: AgentState) -> AgentState:
         """Route decision node - determine which challenge to execute."""
         try:
-            logger.info(f"Making route decision for session: {state.session_id}")
+            logger.info(f"Making route decision for session: {state['session_id']}")
             
             # Analyze current context and determine best challenge
             context = await self._analyze_context(state)
@@ -323,39 +311,39 @@ class SocialArenaAgent(BaseModel):
             # Make routing decision
             routing_decision = await self._make_routing_decision(state, context)
             
-            state.active_challenge = routing_decision["challenge"]
-            state.last_action = "route_decision"
-            state.last_action_time = datetime.now()
+            state["active_challenge"] = routing_decision["challenge"].value if hasattr(routing_decision["challenge"], 'value') else str(routing_decision["challenge"])
+            state["last_action"] = "route_decision"
+            state["last_action_time"] = datetime.now().isoformat()
             
             # Add routing decision to messages
-            state.messages.append({
+            state["messages"].append({
                 "type": "routing_decision",
-                "content": f"Routed to {routing_decision['challenge'].value} challenge",
+                "content": f"Routed to {state['active_challenge']} challenge",
                 "timestamp": datetime.now().isoformat(),
                 "reasoning": routing_decision.get("reasoning", "")
             })
             
-            logger.info(f"Routed to {state.active_challenge.value} challenge")
-            return asdict(state)
+            logger.info(f"Routed to {state['active_challenge']} challenge")
+            return state
             
         except Exception as e:
             logger.error(f"Error in route decision node: {e}")
-            state.error_log.append(f"Route decision error: {str(e)}")
-            return asdict(state)
+            state["error_log"].append(f"Route decision error: {str(e)}")
+            return state
     
     async def _execute_injection_node(self, state: AgentState) -> AgentState:
         """Execute Challenge 1: Injection countermeasures."""
         try:
-            logger.info(f"Executing injection challenge for session: {state.session_id}")
+            logger.info(f"Executing injection challenge for session: {state['session_id']}")
             
             # Get conversation context
-            conversation_context = state.messages[-5:] if state.messages else []
+            conversation_context = state["messages"][-5:] if state["messages"] else []
             
             # Execute dialog strategy
             dialog_result = await self.dialog_strategist.execute_strategy(
                 conversation_context=conversation_context,
-                persona=state.current_persona,
-                strategy=state.injection_strategy
+                persona=state["current_persona"],
+                strategy=state["injection_strategy"]
             )
             
             # Convert dialog_result to dictionary if it's an AgentState object
@@ -365,55 +353,55 @@ class SocialArenaAgent(BaseModel):
                 dialog_dict = dialog_result
             
             # Update state with results
-            state.conversation_state = dialog_dict.get("conversation_state", {})
-            state.current_persona = dialog_dict.get("persona", state.current_persona)
-            state.injection_strategy = dialog_dict.get("strategy", state.injection_strategy)
+            state["conversation_state"] = dialog_dict.get("conversation_state", {})
+            state["current_persona"] = dialog_dict.get("persona", state["current_persona"])
+            state["injection_strategy"] = dialog_dict.get("strategy", state["injection_strategy"])
             
             # Log experiment results
             if dialog_dict.get("experiment_data"):
                 await self.experiment_logger.log_experiment_result(
-                    session_id=state.session_id,
+                    session_id=state["session_id"],
                     experiment_data=dialog_dict["experiment_data"]
                 )
-                state.experiment_results.append(dialog_dict["experiment_data"])
+                state["experiment_results"].append(dialog_dict["experiment_data"])
             
-            state.last_action = "execute_injection"
-            state.last_action_time = datetime.now()
+            state["last_action"] = "execute_injection"
+            state["last_action_time"] = datetime.now().isoformat()
             
             # Add result to messages
-            state.messages.append({
+            state["messages"].append({
                 "type": "injection_result",
                 "content": dialog_dict.get("response", ""),
                 "timestamp": datetime.now().isoformat(),
                 "metadata": {
-                    "persona": state.current_persona,
-                    "strategy": state.injection_strategy,
+                    "persona": state["current_persona"],
+                    "strategy": state["injection_strategy"],
                     "success_rate": dialog_dict.get("success_rate", 0.0)
                 }
             })
             
             logger.info(f"Injection challenge executed successfully")
-            return asdict(state)
+            return state
             
         except Exception as e:
             logger.error(f"Error in injection node: {e}")
-            state.error_log.append(f"Injection execution error: {str(e)}")
-            return asdict(state)
+            state["error_log"].append(f"Injection execution error: {str(e)}")
+            return state
     
     async def _execute_credibility_node(self, state: AgentState) -> AgentState:
         """Execute Challenge 2: Credibility and trust building."""
         try:
-            logger.info(f"Executing credibility challenge for session: {state.session_id}")
+            logger.info(f"Executing credibility challenge for session: {state['session_id']}")
             
             # Update reputation score
-            reputation_score = await self.reputation_model.get_reputation_score(state.agent_id)
+            reputation_score = await self.reputation_model.get_reputation_score(state["agent_id"])
             if reputation_score:
-                state.reputation_score = reputation_score.overall_score
-                state.trust_level = reputation_score.confidence
+                state["reputation_score"] = reputation_score.overall_score
+                state["trust_level"] = reputation_score.confidence
             
             # Execute trade strategies if active
-            if state.active_trades:
-                for trade in state.active_trades:
+            if state["active_trades"]:
+                for trade in state["active_trades"]:
                     trade_result = await self.trade_engine.execute_exchange_round(
                         session_id=trade["session_id"],
                         partner_offers=trade.get("partner_offers", [])
@@ -421,194 +409,195 @@ class SocialArenaAgent(BaseModel):
                     trade["result"] = trade_result.dict()
             
             # Update partner reputations
-            for partner_id, reputation_data in state.partner_reputations.items():
+            for partner_id, reputation_data in state["partner_reputations"].items():
                 partner_score = await self.reputation_model.get_reputation_score(partner_id)
                 if partner_score:
-                    state.partner_reputations[partner_id] = partner_score.overall_score
+                    state["partner_reputations"][partner_id] = partner_score.overall_score
             
-            state.last_action = "execute_credibility"
-            state.last_action_time = datetime.now()
+            state["last_action"] = "execute_credibility"
+            state["last_action_time"] = datetime.now().isoformat()
             
             # Add result to messages
-            state.messages.append({
+            state["messages"].append({
                 "type": "credibility_result",
-                "content": f"Reputation score: {state.reputation_score:.3f}",
+                "content": f"Reputation score: {state['reputation_score']:.3f}",
                 "timestamp": datetime.now().isoformat(),
                 "metadata": {
-                    "reputation_score": state.reputation_score,
-                    "trust_level": state.trust_level,
-                    "active_trades": len(state.active_trades)
+                    "reputation_score": state["reputation_score"],
+                    "trust_level": state["trust_level"],
+                    "active_trades": len(state["active_trades"])
                 }
             })
             
             logger.info(f"Credibility challenge executed successfully")
-            return asdict(state)
+            return state
             
         except Exception as e:
             logger.error(f"Error in credibility node: {e}")
-            state.error_log.append(f"Credibility execution error: {str(e)}")
-            return asdict(state)
+            state["error_log"].append(f"Credibility execution error: {str(e)}")
+            return state
     
     async def _execute_influence_node(self, state: AgentState) -> AgentState:
         """Execute Challenge 3: Content influence and A/B testing."""
         try:
-            logger.info(f"Executing influence challenge for session: {state.session_id}")
+            logger.info(f"Executing influence challenge for session: {state['session_id']}")
             
             # Process hot topics and generate content
             hot_topics = await self.content_pipeline.process_hot_topics()
             generated_content = await self.content_pipeline.generate_content_for_topics(hot_topics)
             
             # Update content queue
-            state.content_queue = [content.dict() for content in generated_content]
+            state["content_queue"] = [content.dict() for content in generated_content]
             
             # Execute A/B tests if active
-            if state.active_ab_tests:
-                for test in state.active_ab_tests:
+            if state["active_ab_tests"]:
+                for test in state["active_ab_tests"]:
                     test_result = await self.ab_test_system.analyze_test_results(test["test_id"])
                     test["result"] = test_result
             
             # Update influence metrics
             pipeline_metrics = await self.content_pipeline.get_pipeline_metrics()
-            state.influence_metrics = pipeline_metrics.dict()
+            state["influence_metrics"] = pipeline_metrics.dict()
             
-            state.last_action = "execute_influence"
-            state.last_action_time = datetime.now()
+            state["last_action"] = "execute_influence"
+            state["last_action_time"] = datetime.now().isoformat()
             
             # Add result to messages
-            state.messages.append({
+            state["messages"].append({
                 "type": "influence_result",
                 "content": f"Generated {len(generated_content)} content items",
                 "timestamp": datetime.now().isoformat(),
                 "metadata": {
                     "hot_topics": len(hot_topics),
                     "generated_content": len(generated_content),
-                    "active_tests": len(state.active_ab_tests),
-                    "pipeline_metrics": state.influence_metrics
+                    "active_tests": len(state["active_ab_tests"]),
+                    "pipeline_metrics": state["influence_metrics"]
                 }
             })
             
             logger.info(f"Influence challenge executed successfully")
-            return asdict(state)
+            return state
             
         except Exception as e:
             logger.error(f"Error in influence node: {e}")
-            state.error_log.append(f"Influence execution error: {str(e)}")
-            return asdict(state)
+            state["error_log"].append(f"Influence execution error: {str(e)}")
+            return state
     
     async def _execute_monitor_node(self, state: AgentState) -> AgentState:
         """Execute Challenge 4: Information monitoring and alerts."""
         try:
-            logger.info(f"Executing monitor challenge for session: {state.session_id}")
+            logger.info(f"Executing monitor challenge for session: {state['session_id']}")
             
             # Process high-confidence items
             high_conf_items = await self.information_monitor.get_high_confidence_items(min_confidence=80)
-            state.high_confidence_clues = [item.dict() for item in high_conf_items]
+            state["high_confidence_clues"] = [item.dict() for item in high_conf_items]
             
             # Auto-push to Social Arena Agent if configured
             for item in high_conf_items:
-                await self.alert_system.auto_push_to_social_arena(item.dict())
+                if item.confidence_score >= 90:
+                    await self.alert_system.auto_push_to_social_arena(item.dict())
             
-            # Execute follow-up actions
             follow_up_results = await self.information_monitor.execute_follow_up_actions()
             
             # Update monitored sources
-            state.monitored_sources = list(self.information_monitor.monitoring_rules.keys())
+            state["monitored_sources"] = list(self.information_monitor.monitoring_rules.keys())
             
-            state.last_action = "execute_monitor"
-            state.last_action_time = datetime.now()
+            state["last_action"] = "execute_monitor"
+            state["last_action_time"] = datetime.now().isoformat()
             
             # Add result to messages
-            state.messages.append({
+            state["messages"].append({
                 "type": "monitor_result",
                 "content": f"Found {len(high_conf_items)} high-confidence items",
                 "timestamp": datetime.now().isoformat(),
                 "metadata": {
                     "high_confidence_items": len(high_conf_items),
                     "follow_up_actions": len(follow_up_results),
-                    "monitored_sources": len(state.monitored_sources)
+                    "monitored_sources": len(state["monitored_sources"])
                 }
             })
             
             logger.info(f"Monitor challenge executed successfully")
-            return asdict(state)
+            return state
             
         except Exception as e:
             logger.error(f"Error in monitor node: {e}")
-            state.error_log.append(f"Monitor execution error: {str(e)}")
-            return asdict(state)
+            state["error_log"].append(f"Monitor execution error: {str(e)}")
+            return state
     
     async def _update_state_node(self, state: AgentState) -> AgentState:
         """Update agent state and store in shared memory."""
         try:
             # Update performance metrics
-            state.performance_metrics = await self._calculate_performance_metrics(state)
+            state["performance_metrics"] = await self._calculate_performance_metrics(state)
             
             # Store updated state in shared memory
-            state_key = f"agent_state:{state.session_id}"
-            self.shared_memory.set(state_key, asdict(state), tags=["agent_state", state.session_id])
+            state_key = f"agent_state:{state['session_id']}"
+            self.shared_memory.set(state_key, state, tags=["agent_state", state["session_id"]])
             
             # Clean up old messages to prevent memory bloat
-            if len(state.messages) > 100:
-                state.messages = state.messages[-50:]  # Keep last 50 messages
+            if len(state["messages"]) > 100:
+                state["messages"] = state["messages"][-50:]  # Keep last 50 messages
             
-            logger.debug(f"State updated for session: {state.session_id}")
-            return asdict(state)
+            logger.debug(f"State updated for session: {state['session_id']}")
+            return state
             
         except Exception as e:
             logger.error(f"Error in state update node: {e}")
-            state.error_log.append(f"State update error: {str(e)}")
-            return asdict(state)
+            state["error_log"].append(f"State update error: {str(e)}")
+            return state
     
     async def _handle_errors_node(self, state: AgentState) -> AgentState:
         """Handle errors and recovery."""
         try:
-            logger.warning(f"Handling errors for session: {state.session_id}")
+            logger.warning(f"Handling errors for session: {state['session_id']}")
             
             # Log error details
-            if state.error_log:
-                last_error = state.error_log[-1]
+            if state["error_log"]:
+                last_error = state["error_log"][-1]
                 logger.error(f"Last error: {last_error}")
             
             # Attempt recovery based on error type
             recovery_action = await self._determine_recovery_action(state)
             
             # Add error handling to messages
-            state.messages.append({
+            state["messages"].append({
                 "type": "error_handling",
                 "content": f"Error handled with action: {recovery_action}",
                 "timestamp": datetime.now().isoformat(),
                 "metadata": {
-                    "error_count": len(state.error_log),
+                    "error_count": len(state["error_log"]),
                     "recovery_action": recovery_action
                 }
             })
             
-            state.last_action = "handle_errors"
-            state.last_action_time = datetime.now()
+            state["last_action"] = "handle_errors"
+            state["last_action_time"] = datetime.now().isoformat()
             
-            return asdict(state)
+            return state
             
         except Exception as e:
             logger.error(f"Error in error handling node: {e}")
-            state.error_log.append(f"Error handling error: {str(e)}")
-            return asdict(state)
+            state["error_log"].append(f"Error handling error: {str(e)}")
+            return state
     
     async def _analyze_context(self, state: AgentState) -> Dict[str, Any]:
         """Analyze current context for routing decisions."""
         context = {
-            "mode": state.current_mode.value,
-            "last_action": state.last_action,
-            "message_count": len(state.messages),
-            "error_count": len(state.error_log),
-            "reputation_score": state.reputation_score,
-            "high_confidence_clues": len(state.high_confidence_clues),
-            "active_content": len(state.content_queue),
-            "active_trades": len(state.active_trades)
+            "mode": state["current_mode"],
+            "last_action": state["last_action"],
+            "message_count": len(state["messages"]),
+            "error_count": len(state["error_log"]),
+            "reputation_score": state["reputation_score"],
+            "high_confidence_clues": len(state["high_confidence_clues"]),
+            "active_content": len(state["content_queue"]),
+            "active_trades": len(state["active_trades"])
         }
         
         # Add time-based context
-        if state.last_action_time:
-            time_since_last = (datetime.now() - state.last_action_time).total_seconds()
+        if state["last_action_time"]:
+            last_action_time = datetime.fromisoformat(state["last_action_time"]) if isinstance(state["last_action_time"], str) else state["last_action_time"]
+            time_since_last = (datetime.now() - last_action_time).total_seconds()
             context["time_since_last_action"] = time_since_last
         
         return context
@@ -647,7 +636,20 @@ class SocialArenaAgent(BaseModel):
         if state.get("error_log") and len(state["error_log"]) > 3:
             return "error"
         
-        return state["active_challenge"].value
+        # Get active challenge from state
+        active_challenge = state.get("active_challenge", "monitor")
+        
+        # Route based on active challenge
+        if "injection" in str(active_challenge).lower():
+            return "injection"
+        elif "credibility" in str(active_challenge).lower():
+            return "credibility"
+        elif "influence" in str(active_challenge).lower():
+            return "influence"
+        elif "monitor" in str(active_challenge).lower():
+            return "monitor"
+        else:
+            return "monitor"
     
     def _should_continue(self, state: Dict[str, Any]) -> str:
         """Determine if workflow should continue or end."""
@@ -658,35 +660,32 @@ class SocialArenaAgent(BaseModel):
         """Calculate agent performance metrics."""
         metrics = {
             "overall_score": 0.0,
-            "reputation_score": state.reputation_score,
-            "trust_level": state.trust_level,
-            "activity_level": min(1.0, len(state.messages) / 10.0),
-            "error_rate": min(1.0, len(state.error_log) / max(len(state.messages), 1)),
-            "influence_score": sum(state.influence_metrics.values()) / max(len(state.influence_metrics), 1),
-            "monitoring_effectiveness": min(1.0, len(state.high_confidence_clues) / 5.0)
+            "reputation_score": state["reputation_score"],
+            "trust_level": state["trust_level"],
+            "activity_level": len(state["messages"]) / 100.0,
+            "error_rate": len(state["error_log"]) / max(len(state["messages"]), 1),
+            "influence_score": len(state["content_queue"]) / 10.0,
+            "monitoring_effectiveness": len(state["high_confidence_clues"]) / 5.0
         }
         
         # Calculate overall score
-        weights = {
-            "reputation_score": 0.25,
-            "trust_level": 0.20,
-            "activity_level": 0.15,
-            "error_rate": -0.15,  # Negative weight
-            "influence_score": 0.15,
-            "monitoring_effectiveness": 0.10
-        }
-        
-        overall_score = sum(metrics[key] * weight for key, weight in weights.items())
-        metrics["overall_score"] = max(0.0, min(1.0, overall_score))
+        metrics["overall_score"] = (
+            metrics["reputation_score"] * 0.3 +
+            metrics["trust_level"] * 0.2 +
+            metrics["activity_level"] * 0.2 +
+            (1.0 - metrics["error_rate"]) * 0.2 +
+            metrics["influence_score"] * 0.05 +
+            metrics["monitoring_effectiveness"] * 0.05
+        )
         
         return metrics
     
     async def _determine_recovery_action(self, state: AgentState) -> str:
         """Determine appropriate recovery action based on errors."""
-        if not state.error_log:
+        if not state["error_log"]:
             return "no_errors"
         
-        last_error = state.error_log[-1].lower()
+        last_error = state["error_log"][-1].lower()
         
         if "injection" in last_error:
             return "reset_injection_state"
@@ -702,11 +701,8 @@ class SocialArenaAgent(BaseModel):
     async def _finalize_run(self, result: Dict[str, Any]) -> None:
         """Finalize the agent run and cleanup."""
         try:
-            # Convert result to dictionary if it's an AgentState object
-            if hasattr(result, '__dict__'):
-                result_dict = asdict(result) if hasattr(result, '__dataclass_fields__') else result.__dict__
-            else:
-                result_dict = result
+            # Result is already a dictionary from TypedDict
+            result_dict = result
             
             # Store final state
             session_id = result_dict.get("session_id")
