@@ -2,13 +2,13 @@ import asyncio
 from agents.social_arena_agent import get_social_arena_agent
 
 async def main():
-    print("🚀 正在启动 Zero Realm Social Agent...")
+    print("正在启动 Zero Realm Social Agent...")
 
     try:
         agent = get_social_arena_agent()
         
         result = await agent.run({
-            "mode": "test",
+            "mode": "passive",
             "challenge": "monitor",
             "session_context": {
                 "objectives": ["gather_intelligence", "build_reputation"],
@@ -16,11 +16,11 @@ async def main():
             }
         })
         
-        print("\n✅ Agent 运行结果：")
+        print("\nAgent 运行结果：")
         print(result)
         
     except Exception as e:
-        print(f"\n❌ 运行出错: {str(e)}")
+        print(f"\n运行出错: {str(e)}")
         import traceback
         traceback.print_exc()
 
