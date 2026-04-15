@@ -358,18 +358,24 @@ class SocialArenaAgent(BaseModel):
                 strategy=state.injection_strategy
             )
             
+            # Convert dialog_result to dictionary if it's an AgentState object
+            if hasattr(dialog_result, '__dict__'):
+                dialog_dict = asdict(dialog_result) if hasattr(dialog_result, '__dataclass_fields__') else dialog_result.__dict__
+            else:
+                dialog_dict = dialog_result
+            
             # Update state with results
-            state.conversation_state = dialog_result.get("conversation_state", {})
-            state.current_persona = dialog_result.get("persona", state.current_persona)
-            state.injection_strategy = dialog_result.get("strategy", state.injection_strategy)
+            state.conversation_state = dialog_dict.get("conversation_state", {})
+            state.current_persona = dialog_dict.get("persona", state.current_persona)
+            state.injection_strategy = dialog_dict.get("strategy", state.injection_strategy)
             
             # Log experiment results
-            if dialog_result.get("experiment_data"):
+            if dialog_dict.get("experiment_data"):
                 await self.experiment_logger.log_experiment_result(
                     session_id=state.session_id,
-                    experiment_data=dialog_result["experiment_data"]
+                    experiment_data=dialog_dict["experiment_data"]
                 )
-                state.experiment_results.append(dialog_result["experiment_data"])
+                state.experiment_results.append(dialog_dict["experiment_data"])
             
             state.last_action = "execute_injection"
             state.last_action_time = datetime.now()
@@ -377,12 +383,12 @@ class SocialArenaAgent(BaseModel):
             # Add result to messages
             state.messages.append({
                 "type": "injection_result",
-                "content": dialog_result.get("response", ""),
+                "content": dialog_dict.get("response", ""),
                 "timestamp": datetime.now().isoformat(),
                 "metadata": {
                     "persona": state.current_persona,
                     "strategy": state.injection_strategy,
-                    "success_rate": dialog_result.get("success_rate", 0.0)
+                    "success_rate": dialog_dict.get("success_rate", 0.0)
                 }
             })
             
@@ -696,11 +702,17 @@ class SocialArenaAgent(BaseModel):
     async def _finalize_run(self, result: Dict[str, Any]) -> None:
         """Finalize the agent run and cleanup."""
         try:
+            # Convert result to dictionary if it's an AgentState object
+            if hasattr(result, '__dict__'):
+                result_dict = asdict(result) if hasattr(result, '__dataclass_fields__') else result.__dict__
+            else:
+                result_dict = result
+            
             # Store final state
-            session_id = result.get("session_id")
+            session_id = result_dict.get("session_id")
             if session_id:
                 state_key = f"agent_state:{session_id}_final"
-                self.shared_memory.set(state_key, result, tags=["agent_state", "final"])
+                self.shared_memory.set(state_key, result_dict, tags=["agent_state", "final"])
             
             # Log completion
             logger.info(f"Agent run finalized for session: {session_id}")
