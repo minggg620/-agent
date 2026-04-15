@@ -112,13 +112,13 @@ async def run_agent(request: AgentRequest):
         # 获取 agent 实例
         agent = get_social_arena_agent()
         
-        # 准备输入数据
+        # 构建 input_data
         input_data = {
             "mode": request.mode,
             "challenge": request.challenge,
+            "message": request.message or "",  # Pass message at top level for routing detection
             "session_context": {
-                "objectives": request.objectives or ["gather_intelligence", "build_reputation"],
-                "message": request.message
+                "objectives": request.objectives or ["gather_intelligence", "build_reputation"]
             }
         }
         

@@ -185,6 +185,7 @@ class SocialArenaAgent(BaseModel):
         
         # Add nodes
         self.workflow.add_node("route_decision", self._route_decision_node)
+        self.workflow.add_node("execute_prompt_generation", self._execute_prompt_generation_node)  # Highest priority
         self.workflow.add_node("execute_injection", self._execute_injection_node)
         self.workflow.add_node("execute_credibility", self._execute_credibility_node)
         self.workflow.add_node("execute_influence", self._execute_influence_node)
@@ -200,6 +201,7 @@ class SocialArenaAgent(BaseModel):
             "route_decision",
             self._route_to_challenge,
             {
+                "execute_prompt_generation": "execute_prompt_generation",  # Highest priority
                 "injection": "execute_injection",
                 "credibility": "execute_credibility", 
                 "influence": "execute_influence",
@@ -209,7 +211,7 @@ class SocialArenaAgent(BaseModel):
         )
         
         # All challenge nodes lead to state update
-        for node in ["execute_injection", "execute_credibility", "execute_influence", "execute_monitor"]:
+        for node in ["execute_prompt_generation", "execute_injection", "execute_credibility", "execute_influence", "execute_monitor"]:
             self.workflow.add_edge(node, "update_state")
         
         # Error handling
@@ -294,6 +296,15 @@ class SocialArenaAgent(BaseModel):
             # Update state with existing data
             for key, value in existing_state.items():
                 state[key] = value
+        
+        # Add user message to state for routing decision detection (highest priority)
+        user_message = input_data.get("message", "")
+        if user_message:
+            state["messages"].append({
+                "type": "user",
+                "content": user_message,
+                "timestamp": datetime.now().isoformat()
+            })
         
         # Store in shared memory
         self.shared_memory.set(f"agent_state:{session_id}", state, tags=["agent_state", session_id])
@@ -525,6 +536,123 @@ class SocialArenaAgent(BaseModel):
             state["error_log"].append(f"Monitor execution error: {str(e)}")
             return state
     
+    async def _execute_prompt_generation_node(self, state: AgentState) -> AgentState:
+        """Execute prompt generation - highest priority mode that bypasses all challenge logic."""
+        try:
+            logger.info(f"Executing prompt generation for session: {state['session_id']}")
+            
+            # Extract user request from messages
+            user_request = ""
+            for msg in state["messages"]:
+                if isinstance(msg, dict):
+                    content = msg.get("content", "")
+                    msg_type = msg.get("type", "")
+                    if msg_type in ["human", "user"] or not msg_type:
+                        user_request = content
+                        break
+            
+            # Generate 3 well-structured Prompts based on user request
+            prompts = self._generate_three_prompts(user_request)
+            
+            # Add prompt generation result to messages
+            state["messages"].append({
+                "type": "prompt_generation_result",
+                "content": "已生成3个版本的Prompt",
+                "timestamp": datetime.now().isoformat(),
+                "metadata": {
+                    "prompts": prompts,
+                    "user_request": user_request
+                }
+            })
+            
+            state["last_action"] = "execute_prompt_generation"
+            state["last_action_time"] = datetime.now().isoformat()
+            
+            logger.info(f"Prompt generation completed successfully")
+            return state
+            
+        except Exception as e:
+            logger.error(f"Error in prompt generation node: {e}")
+            state["error_log"].append(f"Prompt generation error: {str(e)}")
+            return state
+    
+    def _generate_three_prompts(self, user_request: str) -> List[str]:
+        """Generate 3 well-structured Prompts based on user request."""
+        
+        # Extract key themes from user request
+        request_lower = user_request.lower()
+        
+        # Base prompt structure
+        base_structure = """
+# 背景
+{background}
+
+# 任务
+{task}
+
+# 要求
+{requirements}
+
+# 输出格式
+{output_format}
+"""
+        
+        # Version 1: Professional & Structured
+        prompt_v1 = f"""**版本1：专业结构化Prompt**
+
+{base_structure.format(
+    background="基于用户需求：" + user_request[:100] + "...",
+    task="生成高质量、结构化的回复",
+    requirements="1. 专业术语准确\n2. 逻辑清晰\n3. 数据支撑充分\n4. 结论明确",
+    output_format="Markdown格式，包含标题、正文、结论"
+)}
+
+# 专业洞察
+- 基于行业最佳实践
+- 引用相关数据和案例
+- 提供可执行的建议
+
+# 行动建议
+请按照上述结构生成回复，确保内容专业、准确、有价值。"""
+        
+        # Version 2: Creative & Engaging
+        prompt_v2 = f"""**版本2：创意互动Prompt**
+
+{base_structure.format(
+    background="用户创意需求：" + user_request[:100] + "...",
+    task="创造性地回应用户需求",
+    requirements="1. 创意新颖\n2. 表达生动\n3. 互动性强\n4. 易于理解",
+    output_format="对话式风格，包含引言、主体、互动环节"
+)}
+
+# 创意元素
+- 使用生动的比喻和类比
+- 加入互动问题
+- 提供多种视角
+
+# 行动建议
+请以创意和互动的方式回应，让内容更有趣、更有吸引力。"""
+        
+        # Version 3: Data-Driven & Practical
+        prompt_v3 = f"""**版本3：数据驱动实用Prompt**
+
+{base_structure.format(
+    background="实用需求：" + user_request[:100] + "...",
+    task="提供数据驱动的实用解决方案",
+    requirements="1. 数据准确\n2. 方案可行\n3. 步骤清晰\n4. 效果可衡量",
+    output_format="结构化方案，包含分析、方案、步骤、指标"
+)}
+
+# 数据支撑
+- 基于客观数据分析
+- 提供具体实施方案
+- 设定可衡量的指标
+
+# 行动建议
+请基于数据提供实用方案，确保内容可执行、效果可衡量。"""
+        
+        return [prompt_v1, prompt_v2, prompt_v3]
+    
     async def _update_state_node(self, state: AgentState) -> AgentState:
         """Update agent state and store in shared memory."""
         try:
@@ -584,18 +712,18 @@ class SocialArenaAgent(BaseModel):
     async def _analyze_context(self, state: AgentState) -> Dict[str, Any]:
         """Analyze current context for routing decisions."""
         context = {
-            "mode": state["current_mode"],
-            "last_action": state["last_action"],
-            "message_count": len(state["messages"]),
-            "error_count": len(state["error_log"]),
-            "reputation_score": state["reputation_score"],
-            "high_confidence_clues": len(state["high_confidence_clues"]),
-            "active_content": len(state["content_queue"]),
-            "active_trades": len(state["active_trades"])
+            "mode": state.get("current_mode", "passive"),
+            "last_action": state.get("last_action", ""),
+            "message_count": len(state.get("messages", [])),
+            "error_count": len(state.get("error_log", [])),
+            "reputation_score": state.get("reputation_score", 0.5),
+            "high_confidence_clues": len(state.get("high_confidence_clues", [])),
+            "active_content": len(state.get("content_queue", [])),
+            "active_trades": len(state.get("active_trades", []))
         }
         
         # Add time-based context
-        if state["last_action_time"]:
+        if state.get("last_action_time"):
             last_action_time = datetime.fromisoformat(state["last_action_time"]) if isinstance(state["last_action_time"], str) else state["last_action_time"]
             time_since_last = (datetime.now() - last_action_time).total_seconds()
             context["time_since_last_action"] = time_since_last
@@ -604,7 +732,33 @@ class SocialArenaAgent(BaseModel):
     
     async def _make_routing_decision(self, state: AgentState, context: Dict[str, Any]) -> Dict[str, Any]:
         """Make intelligent routing decision based on context."""
-        # Priority-based routing
+        
+        # HIGHEST PRIORITY: Check for prompt generation keywords
+        # This rule bypasses ALL challenge modes when user explicitly requests prompt generation
+        prompt_keywords = [
+            "生成 prompt", "generate prompt", "prompt engineer", 
+            "输出3个", "版本1", "版本2", "版本3", 
+            "不要执行任何监控", "不要执行任何挑战", "直接输出"
+        ]
+        
+        # Check if any message contains prompt generation keywords
+        user_message = ""
+        for msg in state["messages"]:
+            if isinstance(msg, dict):
+                content = msg.get("content", "")
+                msg_type = msg.get("type", "")
+                # Focus on user/human messages
+                if msg_type in ["human", "user"] or not msg_type:
+                    user_message = content
+                    break
+        
+        # Check for keywords (case insensitive)
+        user_message_lower = user_message.lower()
+        for keyword in prompt_keywords:
+            if keyword.lower() in user_message_lower:
+                return {"challenge": "prompt_generation", "reasoning": "User explicitly requested prompt generation"}
+        
+        # Priority-based routing (existing logic)
         if context["error_count"] > 3:
             return {"challenge": ChallengeType.INJECTION, "reasoning": "Error recovery needed"}
         
@@ -618,14 +772,14 @@ class SocialArenaAgent(BaseModel):
             return {"challenge": ChallengeType.INFLUENCE, "reasoning": "Content generation active"}
         
         # Mode-based routing
-        if state.current_mode == AgentMode.DEFENSIVE:
+        if state["current_mode"] == "DEFENSIVE":
             return {"challenge": ChallengeType.INJECTION, "reasoning": "Defensive mode - focus on protection"}
         
-        if state.current_mode == AgentMode.COMPETITIVE:
+        if state["current_mode"] == "COMPETITIVE":
             return {"challenge": ChallengeType.INFLUENCE, "reasoning": "Competitive mode - maximize influence"}
         
         # Default routing based on reputation
-        if state.reputation_score < 0.5:
+        if state["reputation_score"] < 0.5:
             return {"challenge": ChallengeType.CREDIBILITY, "reasoning": "Low reputation - build trust"}
         
         # Default to monitoring
@@ -640,7 +794,9 @@ class SocialArenaAgent(BaseModel):
         active_challenge = state.get("active_challenge", "monitor")
         
         # Route based on active challenge
-        if "injection" in str(active_challenge).lower():
+        if "prompt_generation" in str(active_challenge).lower():
+            return "execute_prompt_generation"
+        elif "injection" in str(active_challenge).lower():
             return "injection"
         elif "credibility" in str(active_challenge).lower():
             return "credibility"
