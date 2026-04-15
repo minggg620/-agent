@@ -128,15 +128,22 @@ async def run_agent(request: AgentRequest):
         # 运行 agent
         result = await agent.run(input_data)
         
+        # 如果结果是 AgentState 对象，转换为字典
+        if hasattr(result, '__dict__'):
+            from dataclasses import asdict
+            result_dict = asdict(result) if hasattr(result, '__dataclass_fields__') else result.__dict__
+        else:
+            result_dict = result
+        
         # 构建响应
         response = AgentResponse(
             success=True,
-            session_id=result.get("session_id", ""),
-            agent_id=result.get("agent_id", ""),
-            current_mode=str(result.get("current_mode", "")),
-            active_challenge=str(result.get("active_challenge", "")),
-            messages=result.get("messages", []),
-            performance_metrics=result.get("performance_metrics", {}),
+            session_id=result_dict.get("session_id", ""),
+            agent_id=result_dict.get("agent_id", ""),
+            current_mode=str(result_dict.get("current_mode", "")),
+            active_challenge=str(result_dict.get("active_challenge", "")),
+            messages=result_dict.get("messages", []),
+            performance_metrics=result_dict.get("performance_metrics", {}),
             timestamp=datetime.now().isoformat()
         )
         
